@@ -33,9 +33,9 @@ server_thread.join()
 from NssMPC.config.configs import DEVICE
 
 # data belong to server
-x = RingTensor.convert_to_ring(torch.tensor([[1.0, 2.0], [3.0, 4.0]], device=DEVICE))
+x = RingTensor.convert_to_ring(torch.tensor([[1.0, 2.0]], device=DEVICE))
 # data belong to client
-y = RingTensor.convert_to_ring(torch.tensor([[-1.0, 2.0], [4.0, 3.0]], device=DEVICE))
+y = RingTensor.convert_to_ring(torch.tensor([[-1.0, 2.0]], device=DEVICE))
 
 # split x into 2 parts
 X = ArithmeticSecretSharing.share(x, 2)
@@ -50,8 +50,9 @@ temp_shared_y1=Y[1]
 
 def server_action(shared_x0):
     with PartyRuntime(server):
-        two_ring = RingTensor.convert_to_ring(torch.tensor([[2.0, 2.0], [2.0, 2.0]]))
-        res_0 = shared_x0 + two_ring
+        # two_ring = RingTensor.convert_to_ring(torch.tensor([[2.0, 2.0], [2.0, 2.0]]))
+        # res_0 = shared_x0 + two_ring
+        res_0 = shared_x0 * RingTensor.convert_to_ring(torch.tensor([[1.0, 2.0]], device=DEVICE))
         #shared_x0.restore()
         restored_x = res_0.restore()
         print("x0:"+str(restored_x))
@@ -62,8 +63,9 @@ def server_action(shared_x0):
 
 def client_action(shared_x1):
     with PartyRuntime(client):
-        ten_ring = RingTensor.convert_to_ring(torch.tensor([[10.0, 10.0], [10.0, 10.0]]))
-        res_1 = shared_x1 + ten_ring
+        # ten_ring = RingTensor.convert_to_ring(torch.tensor([[10.0, 10.0], [10.0, 10.0]]))
+        # res_1 = shared_x1 + ten_ring
+        res_1 = shared_x1  * RingTensor.convert_to_ring(torch.tensor([[1.0, 2.0]], device=DEVICE))
         #shared_x1.restore()
         restored_x  = res_1.restore()
         print("x1"+str(restored_x))
