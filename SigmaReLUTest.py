@@ -3,11 +3,17 @@ import time
 import threading
 
 from NssMPC import ArithmeticSecretSharing
+from NssMPC.crypto.aux_parameter.select_keys import SelectLinKey
+from NssMPC.crypto.protocols.arithmetic_secret_sharing.semi_honest_functional import b2a
+from NssMPC.crypto.protocols.selection.selectlin import SelectLin
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
+from NssMPC.config import SCALE_BIT, GELU_TABLE_BIT
+from NssMPC.crypto.aux_parameter.look_up_table_keys.gelu_key import GeLUKey
 from NssMPC.crypto.primitives.function_secret_sharing.dicf import SigmaDICF
-from NssMPC.crypto.aux_parameter import SigmaDICFKey
+from NssMPC.crypto.aux_parameter import SigmaDICFKey, B2AKey
+from NssMPC.secure_model.utils.param_provider import ParamProvider
 
 # 1. 初始化两方计算环境 (服务器和客户端)
 # 这个设置模仿了 Tutorial_2 中的多线程模拟方法
@@ -18,6 +24,8 @@ client = SemiHonestCS(type='client')
 def setup_party(party):
     """一个通用函数来启动和连接一个计算方"""
     with PartyRuntime(party):
+        party.append_provider(ParamProvider(param_type=SelectLinKey))
+        party.append_provider(ParamProvider(param_type=B2AKey))
         party.online()
 
 
@@ -31,40 +39,57 @@ server_thread.join()
 
 
 # 2. 定义 ReLU 计算函数
-def sigma_relu_server(x_shift,key0):
+def sigma_relu_server(x_ss,x_shift,dicf_key0,select_lin_key0):
     """服务器端的计算逻辑"""
     with PartyRuntime(server):
         start = time.time()
-        res_0 = SigmaDICF.eval(x_shift=x_shift, key=key0, party_id=0)
+        #select_lin_key0 = PartyRuntime.party.get_param(SelectLinKey, x_shift.numel())
+        drelu_bss = SigmaDICF.eval(x_shift=x_shift, key=dicf_key0, party_id=0)
         spent_time = time.time() - start
-        print("time for get secret share:" + str(spent_time))
-        res_1 = server.receive()
-
-        final_result = res_0 ^ res_1
-        print(final_result)
+        drelu_ass = b2a(drelu_bss,PartyRuntime.party)
+        relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key0)
+        # drelu_res_1 = server.receive()
+        # final_res = drelu_res_1 ^ drelu_res_0
+        #final_res = relu_res_0.restore()
+        #final_result = res_0 ^ res_1
+        #print(final_res)
+        #relu_res = relu_ss_0.restore().convert_to_real_field()
         spent_time = time.time() - start
         print("time for get plaintext:"+str(spent_time))
 
-def sigma_relu_client(x_shift,key1):
+def sigma_relu_client(x_ss,x_shift,dicf_key1,select_lin_key1):
     with PartyRuntime(client):
-        res_1 = SigmaDICF.eval(x_shift=x_shift, key=key1, party_id=1)
-        client.send(res_1)
+        drelu_bss = SigmaDICF.eval(x_shift=x_shift, key=dicf_key1, party_id=1)
+        drelu_ass = b2a(drelu_bss, PartyRuntime.party)
+        relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key1)
+        client.send(drelu_ass)
+
+
+def _relu_select_eval(x_shift: ArithmeticSecretSharing, signal, r_in, r):
+    shape = x_shift.shape
+    x_shift = x_shift.flatten()
+    return
+
 
 if __name__ == "__main__":
-    plaintext_input = torch.Tensor([[1,2,3,-4,-5,1,-6],[1,2,3,-4,-5,1,-6]]) #torch.randn(100, 5)
+    plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6],[1,2,3,-4,-5,1,-6]]) #torch.randn(100, 5)
     #plaintext_input = torch.randn(512, 3072)
     num_elements = plaintext_input.numel()
-
-    # 将 torch.tensor 转换为 RingTensor
     x_ring = RingTensor.convert_to_ring(plaintext_input)
-    x_ring.convert_to_real_field()
+    p = RingTensor([0,0,1,0]).repeat(num_elements,1)
+    q = RingTensor([0,0,0,0]).repeat(num_elements,1)
+    SelectLinKey.gen_and_save(num_elements,None, p, q)
+    B2AKey.gen_and_save(plaintext_input.numel())
+    select_lin_key0, select_lin_key1 = SelectLinKey.gen(plaintext_input.numel(),p, q)
+    # 将 torch.tensor 转换为 RingTensor
+
     X = ArithmeticSecretSharing.share(x_ring, 2)
-    key0, key1 = SigmaDICFKey.gen(num_of_keys=num_elements)
+    dicf_key0, dicf_key1 = SigmaDICFKey.gen(num_of_keys=num_elements)
 
-    x_shift = key0.r_in.reshape(x_ring.shape) + key1.r_in.reshape(x_ring.shape) + x_ring
+    x_shift = dicf_key0.r_in.reshape(x_ring.shape) + dicf_key1.r_in.reshape(x_ring.shape) + x_ring
 
-    server_relu_thread = threading.Thread(target=sigma_relu_server, args=(x_shift,key0))
-    client_relu_thread = threading.Thread(target=sigma_relu_client, args=(x_shift,key1))
+    server_relu_thread = threading.Thread(target=sigma_relu_server, args=(X[0],x_shift,dicf_key0,select_lin_key0))
+    client_relu_thread = threading.Thread(target=sigma_relu_client, args=(X[1],x_shift,dicf_key1,select_lin_key1))
 
     server_relu_thread.start()
     client_relu_thread.start()
