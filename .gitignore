@@ -1,5 +1,6 @@
 #NssMPClib
-#NssMPClib/tutorials/
+NssMPClib/tutorials/.virtual_documents
+NssMPClib/tutorials/.ipynb_checkpoints
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -65,11 +65,6 @@ def sigma_relu_client(x_ss,x_shift,dicf_key1,select_lin_key1):
         client.send(drelu_ass)
 
 
-def _relu_select_eval(x_shift: ArithmeticSecretSharing, signal, r_in, r):
-    shape = x_shift.shape
-    x_shift = x_shift.flatten()
-    return
-
 
 if __name__ == "__main__":
     plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6],[1,2,3,-4,-5,1,-6]]) #torch.randn(100, 5)

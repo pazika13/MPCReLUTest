@@ -11,8 +11,8 @@ if project_root not in sys.path:
 device = "cuda"
 
 def CrtptenReLU():
-    plaintext_input = torch.Tensor([1,2,3,-2,-6]) # torch.randn(100, 5)  # 10x100 的张量
-    plaintext_input = torch.randn(512, 3072)
+    plaintext_input = torch.tensor([1,2,3,-2,-6]) # torch.randn(100, 5)  # 10x100 的张量
+    #plaintext_input = torch.randn(512, 3072)
     crypten_input = crypten.cryptensor(plaintext_input,device=device)
     print("\n正在执行 ReLU...")
     crypten.reset_communication_stats()

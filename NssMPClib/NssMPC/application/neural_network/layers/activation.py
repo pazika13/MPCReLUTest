@@ -88,6 +88,12 @@ def _gelu_select_eval(x_shift: RingTensor, s_shift, key, r_in_1, r_in_2, party):
     return ArithmeticSecretSharing(RingTensor.where(s_shift, (party.party_id - r_in_1) * x_shift - r_in_2 + key.w
                                                     , r_in_1 * x_shift + key.w - key.z).reshape(shape))
 
+def _relu_select_eval(x_shift: RingTensor, s_shift, key, r_in_1, r_in_2, party):
+    shape = x_shift.shape
+    x_shift = x_shift.flatten()
+    return ArithmeticSecretSharing(RingTensor.where(s_shift, (party.party_id - r_in_1) * x_shift - r_in_2 + key.w
+                                                    , r_in_1 * x_shift + key.w - key.z).reshape(shape))
+
 
 def _gelu_forward_gpu(x):
     """
@@ -145,9 +151,54 @@ def _gelu_forward_gpu(x):
     s_shift.bit_len = d_shift.bit_len
     relu_x = _gelu_select_eval(x_shift, s_shift, select_key, select_lin_key.d, x_r_in, PartyRuntime.party)
     relu_x.dtype = x.dtype
-
+    temp = relu_x.restore()
+    print(temp.convert_to_real_field())
     return (relu_x - LookUp.eval(c, gelu_key.look_up_key, gelu_key.look_up_table)).reshape(shape)
 
+
+def _relu_forward_gpu(x):
+    table_scale_bit = GELU_TABLE_BIT
+    shape = x.shape
+    x = x.flatten()
+
+    gelu_key = PartyRuntime.party.get_param(GeLUKey, x.numel())
+    sigma_key = gelu_key.sigma_key
+    select_lin_key = gelu_key.select_lin_key
+    select_key = gelu_key.select_key
+
+    x_r_in = gelu_key.sigma_key.r_in
+    x_shift = ArithmeticSecretSharing(x_r_in) + x.flatten()
+    x_shift = x_shift.restore()
+
+    y_shift = x_shift // (x.scale // (2 ** table_scale_bit))
+    y_shift.bit_len = x.bit_len - SCALE_BIT + table_scale_bit
+
+    d_and_w = SigmaDICF.one_key_eval(
+        [y_shift, y_shift + (2 ** (table_scale_bit + 2) - 1), y_shift - (2 ** (table_scale_bit + 2))], sigma_key,
+        PartyRuntime.party.party_id)
+    d = d_and_w[0]
+    w = d_and_w[1] ^ d_and_w[2]
+
+    d_and_w_b = RingTensor.cat([d, w], dim=0)
+    d_and_w_a = b2a(d_and_w_b, PartyRuntime.party)
+    d = d_and_w_a[:d.numel()]
+    w = d_and_w_a[d.numel():]
+
+    w_shift = ArithmeticSecretSharing(select_lin_key.w) + w.flatten()
+    d_shift = ArithmeticSecretSharing(select_lin_key.d) + d.flatten()
+
+    length = w_shift.numel()
+    w_and_d = ArithmeticSecretSharing.cat([w_shift, d_shift], dim=0).restore()
+    w_shift = w_and_d[:length]
+    d_shift = w_and_d[length:]
+
+    s_shift = d_shift % 2
+    s_shift.bit_len = d_shift.bit_len
+    relu_x = _relu_select_eval(x_shift, s_shift, select_key, select_lin_key.d, x_r_in, PartyRuntime.party)
+    relu_x.dtype = x.dtype
+    # temp = relu_x.restore()
+    # print(temp.convert_to_real_field())
+    return relu_x.reshape(shape)
 
 class SecReLU(torch.nn.Module):
     """
@@ -227,6 +278,14 @@ class SecGELU(torch.nn.Module):
             return _gelu_forward_cpu(x)
         else:
             return _gelu_forward_gpu(x)
+
+class SecReLUTest(torch.nn.Module):
+    def __init__(self, approximate='none'):
+        super(SecReLUTest, self).__init__()
+
+    def forward(self, x):
+        assert isinstance(x, ArithmeticSecretSharing), f"unsupported data type(s) for GeLU: {type(x)}"
+        return _relu_forward_gpu(x)
 
 
 def _SecGELU(x):

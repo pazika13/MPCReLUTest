@@ -56,8 +56,8 @@ def fastsecnet_relu_client(x_shift,key1):
         res_1.restore()
 
 if __name__ == "__main__":
-    plaintext_input = torch.tensor([[1.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,0.2,3.,-0.4,-5.,1.,-6.5,1.]])
-    #plaintext_input = torch.randn(10, 5)
+    plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
+    #plaintext_input = torch.randn(10, 5)g
     #plaintext_input = torch.randn(12, 3072)
     #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
     num_elements = plaintext_input.numel()
@@ -65,9 +65,9 @@ if __name__ == "__main__":
     # 将 torch.tensor 转换为 RingTensor
     x_ring = RingTensor.convert_to_ring(plaintext_input)
     X = ArithmeticSecretSharing.share(x_ring, 2)
-    r = RingTensor.random([1],down_bound=-3000,upper_bound=3000).to("float")
-    #r = RingTensor.random([1], dtype='float')
-    #r = RingTensor.convert_to_ring(torch.tensor([-300000000.]))
+    #r = RingTensor.random([1],down_bound=-3000,upper_bound=3000).to("float")
+    r = RingTensor.convert_to_ring(torch.tensor([100000.]))
+    #r = RingTensor.convert_to_ring(torch.tensor([3000000000.]))
     key0, key1 = FastSecNetReLU.gen(num_of_keys=num_elements,alpha=r)
 
     server_relu_thread = threading.Thread(target=fastsecnet_relu_server, args=(X[0],key0))
