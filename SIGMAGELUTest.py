@@ -1,91 +1,92 @@
+import os
+import random
+
 import torch
+import time
 import threading
 
-from NssMPC.application.neural_network.layers import SecGELU
-from NssMPC.crypto.aux_parameter import GeLUKey, B2AKey
-from NssMPC import ArithmeticSecretSharing
+from FastSecNet import FastSecNetReLUKey, FastSecNetReLU
+from NssMPC import ArithmeticSecretSharing, RingTensor
+from NssMPC.application.neural_network.layers.activation import SecReLUTest, SecGELU
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
+from NssMPC.crypto.primitives.function_secret_sharing.dicf import SigmaDICF
+from NssMPC.crypto.aux_parameter import SigmaDICFKey, GeLUKey, B2AKey
 from NssMPC.secure_model.utils.param_provider import ParamProvider
 
-# --- Main execution block ---
+# 1. 初始化两方计算环境 (服务器和客户端)
+# 这个设置模仿了 Tutorial_2 中的多线程模拟方法
+server = SemiHonestCS(type='server')
+client = SemiHonestCS(type='client')
+
+
+def setup_party(party):
+    """一个通用函数来启动和连接一个计算方"""
+    with PartyRuntime(party):
+        party.append_provider(ParamProvider(param_type=GeLUKey))
+        party.append_provider(ParamProvider(param_type=B2AKey))
+        party.online()
+
+
+# 在不同的线程中启动服务器和客户端
+server_thread = threading.Thread(target=setup_party, args=(server,))
+client_thread = threading.Thread(target=setup_party, args=(client,))
+server_thread.start()
+client_thread.start()
+client_thread.join()
+server_thread.join()
+
+
+# 2. 定义 ReLU 计算函数
+def fastsecnet_relu_server(x_shift,key0):
+    """服务器端的计算逻辑"""
+    with PartyRuntime(server):
+        start = time.time()
+        relu_layer = SecGELU()
+        res_0 = relu_layer(x_shift)
+        spent_time = time.time() - start
+        print("time for get secret share:" + str(spent_time))
+        #res_1 = server.receive()
+
+        final_result = res_0.restore().convert_to_real_field() #+ res_1
+        print("final:"+str(final_result))
+        spent_time = time.time() - start
+        print("time for get plaintext:"+str(spent_time))
+
+def fastsecnet_relu_client(x_shift,key1):
+    with PartyRuntime(client):
+        relu_layer = SecGELU()
+        res_1 = relu_layer(x_shift)
+        #client.send(res_1)
+        res_1.restore()
+
 if __name__ == "__main__":
-    # 1. 初始化两方计算环境
-    server = SemiHonestCS(type='server')
-    client = SemiHonestCS(type='client')
-
-    def setup_party(party):
-        with PartyRuntime(party):
-            # 确保Provider被正确添加
-            party.append_provider(ParamProvider(param_type=GeLUKey))
-            party.append_provider(ParamProvider(param_type=B2AKey))
-            party.online()
-
-    server_thread = threading.Thread(target=setup_party, args=(server,))
-    client_thread = threading.Thread(target=setup_party, args=(client,))
-    server_thread.start()
-    client_thread.start()
-    client_thread.join()
-    server_thread.join()
-    print("--- Parties connected and ready ---")
-
-    # 2. 准备数据和密钥
-    plaintext_input = torch.tensor([[-2.5, -1.0, 0.0, 0.5, 1.0, 2.5]], dtype=torch.float32)
-    print("Plaintext Input:\n", plaintext_input)
-
-    # PyTorch的参考结果
+    plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
+    #plaintext_input = torch.randn(10, 5)g
+    #plaintext_input = torch.randn(12, 3072)
+    #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
+    num_elements = plaintext_input.numel()
+    GeLUKey.gen_and_save(num_elements)
+    B2AKey.gen_and_save(num_elements)
+    # 将 torch.tensor 转换为 RingTensor
+    x_ring = RingTensor.convert_to_ring(plaintext_input)
+    X = ArithmeticSecretSharing.share(x_ring, 2)
+    #r = RingTensor.random([1],down_bound=-3000,upper_bound=3000).to("float")
+    r = RingTensor.convert_to_ring(torch.tensor([100000.]))
+    #r = RingTensor.convert_to_ring(torch.tensor([3000000000.]))
+    key0, key1 = FastSecNetReLU.gen(num_of_keys=num_elements,alpha=r)
     torch_gelu = torch.nn.GELU()
     plaintext_result = torch_gelu(plaintext_input).to(torch.float64).to("cuda")
     print("Expected PyTorch Result:\n", plaintext_result)
+    server_relu_thread = threading.Thread(target=fastsecnet_relu_server, args=(X[0],key0))
+    client_relu_thread = threading.Thread(target=fastsecnet_relu_client, args=(X[1],key1))
 
-    # 生成协议所需的密钥
-    GeLUKey.gen_and_save(plaintext_input.numel())
-    B2AKey.gen_and_save(plaintext_input.numel())
-
-    # 将明文转换为RingTensor并进行秘密分享
-    x_ring = RingTensor.convert_to_ring(plaintext_input)
-    x_shared = ArithmeticSecretSharing.share(x_ring, 2)
-    x_server, x_client = x_shared[0], x_shared[1]
-
-    # 3. 定义各方的计算任务
-    result_shares = {}
-
-    def run_server_task(x_s):
-        with PartyRuntime(server):
-            # 直接实例化并调用SecGELU
-            gelu_op = SecGELU()
-            result_shares['server'] = gelu_op(x_s)
-            # 5. 重构结果并验证
-            final_result_shared = result_shares['server']
-            final_result_ring = final_result_shared.restore()
-            final_result_float = final_result_ring.convert_to_real_field()
-
-            print("Reconstructed MPC Result:\n", final_result_float)
-
-            # 比较结果
-            # 使用 atol (absolute tolerance) 来处理浮点数精度问题
-            assert torch.allclose(plaintext_result, final_result_float, atol=1e-3), "Test Failed: Results do not match!"
-            print("\n✅ Test Passed: MPC GeLU result matches PyTorch result!")
+    server_relu_thread.start()
+    client_relu_thread.start()
+    client_relu_thread.join()
+    server_relu_thread.join()
 
 
-    def run_client_task(x_c):
-        with PartyRuntime(client):
-            gelu_op = SecGELU()
-            result_shares['client'] = gelu_op(x_c)
-            result_shares['client'].restore()
-
-    # 4. 在不同线程中执行安全计算
-    server_task_thread = threading.Thread(target=run_server_task, args=(x_server,))
-    client_task_thread = threading.Thread(target=run_client_task, args=(x_client,))
-
-    server_task_thread.start()
-    client_task_thread.start()
-    server_task_thread.join()
-    client_task_thread.join()
-    print("--- Secure computation finished ---")
-
-
-    # 6. 关闭连接
     server.close()
     client.close()
