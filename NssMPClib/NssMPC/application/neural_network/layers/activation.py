@@ -6,6 +6,7 @@ import torch
 
 from NssMPC.config import SCALE_BIT, GELU_TABLE_BIT
 from NssMPC.config.runtime import PartyRuntime
+from NssMPC.crypto.aux_parameter import SigmaDICFKey
 from NssMPC.crypto.aux_parameter.look_up_table_keys.gelu_key import GeLUKey
 from NssMPC.crypto.protocols.arithmetic_secret_sharing.semi_honest_functional import b2a
 
@@ -151,8 +152,6 @@ def _gelu_forward_gpu(x):
     s_shift.bit_len = d_shift.bit_len
     relu_x = _gelu_select_eval(x_shift, s_shift, select_key, select_lin_key.d, x_r_in, PartyRuntime.party)
     relu_x.dtype = x.dtype
-    temp = relu_x.restore()
-    print(temp.convert_to_real_field())
     return (relu_x - LookUp.eval(c, gelu_key.look_up_key, gelu_key.look_up_table)).reshape(shape)
 
 
@@ -162,35 +161,24 @@ def _relu_forward_gpu(x):
     x = x.flatten()
 
     gelu_key = PartyRuntime.party.get_param(GeLUKey, x.numel())
+    dicf_key = PartyRuntime.party.get_param(SigmaDICFKey, x.numel())
     sigma_key = gelu_key.sigma_key
+    sigma_key = dicf_key
     select_lin_key = gelu_key.select_lin_key
     select_key = gelu_key.select_key
 
-    x_r_in = gelu_key.sigma_key.r_in
+    #x_r_in = dicf_key.r_in
+    x_r_in = sigma_key.r_in
     x_shift = ArithmeticSecretSharing(x_r_in) + x.flatten()
     x_shift = x_shift.restore()
 
-    y_shift = x_shift // (x.scale // (2 ** table_scale_bit))
-    y_shift.bit_len = x.bit_len - SCALE_BIT + table_scale_bit
 
-    d_and_w = SigmaDICF.one_key_eval(
-        [y_shift, y_shift + (2 ** (table_scale_bit + 2) - 1), y_shift - (2 ** (table_scale_bit + 2))], sigma_key,
-        PartyRuntime.party.party_id)
-    d = d_and_w[0]
-    w = d_and_w[1] ^ d_and_w[2]
+    d = SigmaDICF.eval(x_shift, sigma_key, PartyRuntime.party.party_id)
 
-    d_and_w_b = RingTensor.cat([d, w], dim=0)
-    d_and_w_a = b2a(d_and_w_b, PartyRuntime.party)
-    d = d_and_w_a[:d.numel()]
-    w = d_and_w_a[d.numel():]
+    d = b2a(d, PartyRuntime.party)
 
-    w_shift = ArithmeticSecretSharing(select_lin_key.w) + w.flatten()
     d_shift = ArithmeticSecretSharing(select_lin_key.d) + d.flatten()
-
-    length = w_shift.numel()
-    w_and_d = ArithmeticSecretSharing.cat([w_shift, d_shift], dim=0).restore()
-    w_shift = w_and_d[:length]
-    d_shift = w_and_d[length:]
+    d_shift = d_shift.restore()
 
     s_shift = d_shift % 2
     s_shift.bit_len = d_shift.bit_len

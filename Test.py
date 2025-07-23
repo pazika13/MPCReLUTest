@@ -4,6 +4,7 @@ import threading
 
 from NssMPC import ArithmeticSecretSharing
 from NssMPC.crypto.aux_parameter.select_keys import SelectLinKey
+from NssMPC.crypto.primitives.boolean_secret_sharing import BooleanSecretSharing
 from NssMPC.crypto.protocols.arithmetic_secret_sharing.semi_honest_functional import b2a
 from NssMPC.crypto.protocols.selection.selectlin import SelectLin
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
@@ -46,13 +47,13 @@ def sigma_relu_server(x_ss,x_shift,dicf_key0,select_lin_key0):
         #select_lin_key0 = PartyRuntime.party.get_param(SelectLinKey, x_shift.numel())
         drelu_bss = SigmaDICF.eval(x_shift=x_shift, key=dicf_key0, party_id=0)
         spent_time = time.time() - start
-        drelu_ass = b2a(drelu_bss,PartyRuntime.party)
-        relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key0)
-        # drelu_res_1 = server.receive()
-        # final_res = drelu_res_1 ^ drelu_res_0
+        #drelu_ass = b2a(drelu_bss,PartyRuntime.party)
+        #relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key0)
+        drelu_res_1 = server.receive()
+        final_res = drelu_res_1 ^ drelu_bss
         #final_res = relu_res_0.restore()
         #final_result = res_0 ^ res_1
-        #print(final_res)
+        print(final_res)
         #relu_res = relu_ss_0.restore().convert_to_real_field()
         spent_time = time.time() - start
         print("time for get plaintext:"+str(spent_time))
@@ -60,9 +61,9 @@ def sigma_relu_server(x_ss,x_shift,dicf_key0,select_lin_key0):
 def sigma_relu_client(x_ss,x_shift,dicf_key1,select_lin_key1):
     with PartyRuntime(client):
         drelu_bss = SigmaDICF.eval(x_shift=x_shift, key=dicf_key1, party_id=1)
-        drelu_ass = b2a(drelu_bss, PartyRuntime.party)
-        relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key1)
-        client.send(drelu_ass)
+        #drelu_ass = b2a(drelu_bss, PartyRuntime.party)
+        #relu_ss_0 = SelectLin.eval(x_ss.flatten(), drelu_ass.flatten(), RingTensor.zeros_like(x_shift.flatten()), select_lin_key1)
+        client.send(drelu_bss)
 
 
 
@@ -77,7 +78,8 @@ if __name__ == "__main__":
     B2AKey.gen_and_save(plaintext_input.numel())
     select_lin_key0, select_lin_key1 = SelectLinKey.gen(plaintext_input.numel(),p, q)
     # 将 torch.tensor 转换为 RingTensor
-
+    r_plaintext = RingTensor.random(plaintext_input.shape, down_bound=0, upper_bound=2)
+    R = BooleanSecretSharing.share(r_plaintext,2)
     X = ArithmeticSecretSharing.share(x_ring, 2)
     dicf_key0, dicf_key1 = SigmaDICFKey.gen(num_of_keys=num_elements)
 

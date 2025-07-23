@@ -1,3 +1,4 @@
+import time
 import unittest
 import torch
 import crypten
@@ -13,6 +14,8 @@ device = "cuda"
 def CrtptenReLU():
     plaintext_input = torch.tensor([1,2,3,-2,-6]) # torch.randn(100, 5)  # 10x100 的张量
     #plaintext_input = torch.randn(512, 3072)
+    plaintext_input = torch.randn(52, 307)
+    start = time.time()
     crypten_input = crypten.cryptensor(plaintext_input,device=device)
     print("\n正在执行 ReLU...")
     crypten.reset_communication_stats()
@@ -20,7 +23,8 @@ def CrtptenReLU():
     print(str(crypten.get_communication_stats()))
     temp = relu_output.get_plain_text()
     print(temp)
-    print("ReLU 执行完毕。")
+    spent = time.time() - start
+    print("ReLU 执行完毕。用时:"+str(spent))
 
 def CrtptenReLUMain():
     launcher = MultiProcessLauncher(2, CrtptenReLU)
