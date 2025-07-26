@@ -7,7 +7,9 @@ import torch
 from NssMPC.config import SCALE_BIT, GELU_TABLE_BIT
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.crypto.aux_parameter import SigmaDICFKey
+from NssMPC.crypto.aux_parameter.function_secret_sharing_keys.drelu_key import UnauthSharkDReLUKey
 from NssMPC.crypto.aux_parameter.look_up_table_keys.gelu_key import GeLUKey
+from NssMPC.crypto.primitives.function_secret_sharing.drelu import UnauthSharkDReLU
 from NssMPC.crypto.protocols.arithmetic_secret_sharing.semi_honest_functional import b2a
 
 from NssMPC.common.ring.ring_tensor import RingTensor
@@ -155,7 +157,7 @@ def _gelu_forward_gpu(x):
     return (relu_x - LookUp.eval(c, gelu_key.look_up_key, gelu_key.look_up_table)).reshape(shape)
 
 
-def _relu_forward_gpu(x):
+def _sigma_relu_forward_gpu(x):
     table_scale_bit = GELU_TABLE_BIT
     shape = x.shape
     x = x.flatten()
@@ -187,6 +189,24 @@ def _relu_forward_gpu(x):
     # temp = relu_x.restore()
     # print(temp.convert_to_real_field())
     return relu_x.reshape(shape)
+
+
+def _unauth_shark_relu_forward_gpu(x):
+    shape = x.shape
+    x = x.flatten()
+
+    drelu_key = PartyRuntime.party.get_param(UnauthSharkDReLUKey, x.numel())
+    #x_r_in = drelu_key.r_in
+    x_r_in = drelu_key.r_in
+    x_shift = ArithmeticSecretSharing(x_r_in) + x.flatten()
+    x_shift = x_shift.restore()
+
+
+    d = UnauthSharkDReLU.eval(x_shift, drelu_key, PartyRuntime.party.party_id)
+    d.restore()
+    print(d.convert_to_real_field())
+
+    return
 
 class SecReLU(torch.nn.Module):
     """
@@ -267,13 +287,21 @@ class SecGELU(torch.nn.Module):
         else:
             return _gelu_forward_gpu(x)
 
-class SecReLUTest(torch.nn.Module):
+class SigmaReLUTest(torch.nn.Module):
     def __init__(self, approximate='none'):
-        super(SecReLUTest, self).__init__()
+        super(SigmaReLUTest, self).__init__()
 
     def forward(self, x):
         assert isinstance(x, ArithmeticSecretSharing), f"unsupported data type(s) for GeLU: {type(x)}"
-        return _relu_forward_gpu(x)
+        return _sigma_relu_forward_gpu(x)
+
+class UnauthSharkReLUTest(torch.nn.Module):
+    def __init__(self, approximate='none'):
+        super(UnauthSharkReLUTest, self).__init__()
+
+    def forward(self, x):
+        assert isinstance(x, ArithmeticSecretSharing), f"unsupported data type(s) for GeLU: {type(x)}"
+        return _unauth_shark_relu_forward_gpu(x)
 
 
 def _SecGELU(x):
