@@ -70,7 +70,7 @@ if __name__ == "__main__":
     r = RingTensor.convert_to_ring(torch.tensor([100000.]))
     #r = RingTensor.convert_to_ring(torch.tensor([3000000000.]))
     key0, key1 = FastSecNetReLU.gen(num_of_keys=num_elements,alpha=r)
-
+    print(plaintext_input)
     server_relu_thread = threading.Thread(target=fastsecnet_relu_server, args=(X[0],key0))
     client_relu_thread = threading.Thread(target=fastsecnet_relu_client, args=(X[1],key1))
 

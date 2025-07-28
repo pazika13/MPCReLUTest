@@ -6,7 +6,7 @@ import time
 import threading
 
 from NssMPC import ArithmeticSecretSharing, RingTensor
-from NssMPC.application.neural_network.layers.activation import SecReLUTest
+from NssMPC.application.neural_network.layers.activation import SigmaReLU
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
@@ -43,7 +43,7 @@ def sigma_relu_server(x_shift):
     """服务器端的计算逻辑"""
     with PartyRuntime(server):
         start = time.time()
-        relu_layer = SecReLUTest()
+        relu_layer = SigmaReLU()
         res_0 = relu_layer(x_shift)
         spent_time = time.time() - start
         print("time for get secret share:" + str(spent_time))
@@ -56,7 +56,7 @@ def sigma_relu_server(x_shift):
 
 def sigma_relu_client(x_shift):
     with PartyRuntime(client):
-        relu_layer = SecReLUTest()
+        relu_layer = SigmaReLU()
         res_1 = relu_layer(x_shift)
         #client.send(res_1)
         res_1.restore()
