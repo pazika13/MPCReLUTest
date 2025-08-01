@@ -32,5 +32,5 @@ class FastSecNetReLU:
         x_r = k_ss.restore()
         res = DCF.eval(x_r,key.dcf_key,party_id) + key.b_ss
         #print(x_r.convert_to_real_field())
-        y = res[...,0].ring_tensor * x_r + res[...,1]
+        y = res[...,0] * x_r + res[...,1]
         return y

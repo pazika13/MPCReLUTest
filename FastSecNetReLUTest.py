@@ -11,7 +11,8 @@ from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
 from NssMPC.crypto.primitives.function_secret_sharing.dicf import SigmaDICF
-from NssMPC.crypto.aux_parameter import SigmaDICFKey
+from NssMPC.crypto.aux_parameter import SigmaDICFKey, Wrap
+from NssMPC.secure_model.utils.param_provider import ParamProvider
 
 # 1. 初始化两方计算环境 (服务器和客户端)
 # 这个设置模仿了 Tutorial_2 中的多线程模拟方法
@@ -22,6 +23,7 @@ client = SemiHonestCS(type='client')
 def setup_party(party):
     """一个通用函数来启动和连接一个计算方"""
     with PartyRuntime(party):
+        party.append_provider(ParamProvider(param_type=Wrap))
         party.online()
 
 
@@ -56,19 +58,20 @@ def fastsecnet_relu_client(x_shift,key1):
         res_1.restore()
 
 if __name__ == "__main__":
-    plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
-    plaintext_input = torch.randn(52, 307)
+    plaintext_input = torch.tensor([[3000000000000.,0.2,3.,-0.4,-5.,3000000.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
+    #plaintext_input = torch.randn(52, 307)
     #plaintext_input = torch.randn(10, 5)g
     #plaintext_input = torch.randn(12, 3072)
     #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
     num_elements = plaintext_input.numel()
-
+    Wrap.gen_and_save(num_elements)
     # 将 torch.tensor 转换为 RingTensor
     x_ring = RingTensor.convert_to_ring(plaintext_input)
     X = ArithmeticSecretSharing.share(x_ring, 2)
-    #r = RingTensor.random([1],down_bound=-3000,upper_bound=3000).to("float")
-    r = RingTensor.convert_to_ring(torch.tensor([100000.]))
-    #r = RingTensor.convert_to_ring(torch.tensor([3000000000.]))
+    #r = RingTensor.random([1],down_bound=-30000000000,upper_bound=30000000000).to("float")
+    #r = RingTensor.random([1])
+    #r = RingTensor.convert_to_ring(torch.tensor([100000.]))
+    r = RingTensor.convert_to_ring(torch.tensor([30000.]))
     key0, key1 = FastSecNetReLU.gen(num_of_keys=num_elements,alpha=r)
     print(plaintext_input)
     server_relu_thread = threading.Thread(target=fastsecnet_relu_server, args=(X[0],key0))
