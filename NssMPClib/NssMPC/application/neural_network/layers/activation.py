@@ -172,7 +172,6 @@ def _sigma_relu_forward_gpu(x):
 
 
     d = SigmaDICF.eval(x_shift, sigma_key, PartyRuntime.party.party_id)
-
     d = b2a(d, PartyRuntime.party)
 
     d_shift = ArithmeticSecretSharing(select_lin_key.d) + d.flatten()

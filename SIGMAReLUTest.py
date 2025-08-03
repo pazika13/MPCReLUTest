@@ -64,7 +64,7 @@ def sigma_relu_client(x_shift):
 if __name__ == "__main__":
     plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
     #plaintext_input = torch.randn(10, 5)
-    plaintext_input = torch.randn(52, 307)
+    #plaintext_input = torch.randn(52, 307)
     #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
     num_elements = plaintext_input.numel()
     GeLUKey.gen_and_save(num_elements)
