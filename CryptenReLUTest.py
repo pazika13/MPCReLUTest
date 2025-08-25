@@ -9,12 +9,14 @@ import crypten.nn as cnn
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-device = "cuda"
-
 def CrtptenReLU():
+    device = "cuda"
     plaintext_input = torch.tensor([1,2,3,-2,-6]) # torch.randn(100, 5)  # 10x100 的张量
     #plaintext_input = torch.randn(512, 3072)
-    plaintext_input = torch.randn(52, 307)
+    #plaintext_input = torch.randn(52, 307)
+    plaintext_input = torch.randn(2, 12, 64, 64)
+    #plaintext_input = torch.tensor(
+    #   [[3000000000000., 0.2, 3., -0.4, -5., -3000000., -6.4, 1.], [1940000000., 2., 3., -0.4, -5., 1., -6.5, 1.]])
     start = time.time()
     crypten_input = crypten.cryptensor(plaintext_input,device=device)
     print("\n正在执行 ReLU...")

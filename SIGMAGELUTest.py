@@ -7,7 +7,7 @@ import threading
 
 from FastSecNet import FastSecNetReLUKey, FastSecNetReLU
 from NssMPC import ArithmeticSecretSharing, RingTensor
-from NssMPC.application.neural_network.layers.activation import SecReLUTest, SecGELU
+from NssMPC.application.neural_network.layers.activation import  SecGELU
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
@@ -62,9 +62,10 @@ def fastsecnet_relu_client(x_shift,key1):
         res_1.restore()
 
 if __name__ == "__main__":
-    plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
+    #plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
     #plaintext_input = torch.randn(10, 5)g
     #plaintext_input = torch.randn(12, 3072)
+    plaintext_input = torch.randn(52, 307)
     #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
     num_elements = plaintext_input.numel()
     GeLUKey.gen_and_save(num_elements)

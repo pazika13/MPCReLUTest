@@ -6,13 +6,15 @@ import time
 import threading
 
 from NssMPC import ArithmeticSecretSharing, RingTensor
-from NssMPC.application.neural_network.layers.activation import SigmaReLU
+from NssMPC.application.neural_network.layers.activation import SecReLU
 from NssMPC.secure_model.mpc_party.semi_honest import SemiHonestCS
 from NssMPC.config.runtime import PartyRuntime
 from NssMPC.common.ring.ring_tensor import RingTensor
 from NssMPC.crypto.primitives.function_secret_sharing.dicf import SigmaDICF
 from NssMPC.crypto.aux_parameter import SigmaDICFKey, GeLUKey, B2AKey
 from NssMPC.secure_model.utils.param_provider import ParamProvider
+
+from NssMPClib.NssMPC.crypto.aux_parameter import AssMulTriples, Wrap
 
 # 1. 初始化两方计算环境 (服务器和客户端)
 # 这个设置模仿了 Tutorial_2 中的多线程模拟方法
@@ -24,6 +26,8 @@ def setup_party(party):
     """一个通用函数来启动和连接一个计算方"""
     with PartyRuntime(party):
         party.append_provider(ParamProvider(param_type=GeLUKey))
+        party.append_provider(ParamProvider(param_type=AssMulTriples))
+        party.append_provider(ParamProvider(param_type=Wrap))
         party.append_provider(ParamProvider(param_type=SigmaDICFKey))
         party.append_provider(ParamProvider(param_type=B2AKey))
         party.online()
@@ -43,7 +47,7 @@ def sigma_relu_server(x_shift):
     """服务器端的计算逻辑"""
     with PartyRuntime(server):
         start = time.time()
-        relu_layer = SigmaReLU()
+        relu_layer = SecReLU()
         res_0 = relu_layer(x_shift)
         spent_time = time.time() - start
         print("time for get secret share:" + str(spent_time))
@@ -56,7 +60,7 @@ def sigma_relu_server(x_shift):
 
 def sigma_relu_client(x_shift):
     with PartyRuntime(client):
-        relu_layer = SigmaReLU()
+        relu_layer = SecReLU()
         res_1 = relu_layer(x_shift)
         #client.send(res_1)
         res_1.restore()
@@ -64,12 +68,14 @@ def sigma_relu_client(x_shift):
 if __name__ == "__main__":
     plaintext_input = torch.tensor([[30000000.,0.2,3.,-0.4,-5.,1.,-6.4,1.],[1.,2.,3.,-0.4,-5.,1.,-6.5,1.]])
     #plaintext_input = torch.randn(10, 5)
-    #plaintext_input = torch.randn(52, 307)
+    plaintext_input = torch.randn(52, 307)
     #plaintext_input = torch.tensor([[1,2,3,-4,-5,1,-6,1],[1,2,3,-4,-5,1,-6,1]])
     num_elements = plaintext_input.numel()
     GeLUKey.gen_and_save(num_elements)
     SigmaDICFKey.gen_and_save(num_elements)
     B2AKey.gen_and_save(num_elements)
+    AssMulTriples.gen_and_save(num_elements)
+    Wrap.gen_and_save(num_elements)
     # 将 torch.tensor 转换为 RingTensor
     x_ring = RingTensor.convert_to_ring(plaintext_input)
     X = ArithmeticSecretSharing.share(x_ring, 2)
